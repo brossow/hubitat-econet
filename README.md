@@ -1,40 +1,54 @@
-# Rheem EcoNet Thermostat — Hubitat Driver
+# Rheem EcoNet — Hubitat Drivers
 
-A Hubitat Elevation driver for Rheem EcoNet thermostats, ported from the [Home Assistant pyeconet integration](https://github.com/home-assistant/core/tree/dev/homeassistant/components/econet). Uses the ClearBlade cloud REST API for polling and MQTT command publishing.
+Hubitat Elevation drivers for Rheem EcoNet thermostats and water heaters, ported from the [Home Assistant pyeconet integration](https://github.com/home-assistant/core/tree/dev/homeassistant/components/econet). Uses the ClearBlade cloud REST API for polling and MQTT command publishing.
 
-## Features
+## Drivers
 
-- Reads current temperature, heating/cooling setpoints, HVAC mode, fan speed, and humidity
-- Sends mode, setpoint, and fan commands via the ClearBlade HTTP→MQTT bridge
-- Configurable poll interval (1 minute – 1 hour)
-- Automatic token re-authentication on expiry
-- Supports multiple thermostats on one account (select by index)
-- Implements the Hubitat `Thermostat`, `RelativeHumidityMeasurement`, `Refresh`, and `Initialize` capabilities
-
-## Supported Modes
-
-| HVAC Mode | Fan Mode |
+| Driver | File |
 |---|---|
-| Heat | Auto |
-| Cool | Circulate (on continuous) |
-| Auto (heat/cool) | |
-| Fan Only | |
-| Emergency Heat | |
-| Off | |
+| EcoNet Thermostat | [`EcoNetThermostat.groovy`](EcoNetThermostat.groovy) |
+| EcoNet Water Heater | [`EcoNetWaterHeater.groovy`](EcoNetWaterHeater.groovy) |
+
+Each driver is self-contained — no parent app required.
+
+---
 
 ## Installation
 
+### Via Hubitat Package Manager (recommended)
+
+1. In Hubitat, open **Apps → Hubitat Package Manager → Install**
+2. Search for **Rheem EcoNet** and install
+
+### Manual
+
 1. In Hubitat, go to **Drivers Code → New Driver**
-2. Paste the contents of [`EcoNetThermostat.groovy`](EcoNetThermostat.groovy)
-3. Click **Save**
-4. Go to **Devices → Add Device → Virtual**
-5. Give it a name and select **Rheem EcoNet Thermostat** as the driver type
-6. Click **Save Device**
-7. Enter your EcoNet email and password in the device preferences and click **Save Preferences**
+2. Paste the contents of the desired `.groovy` file and click **Save**
+3. Go to **Devices → Add Device → Virtual**, give it a name, and select the driver type
+4. Enter your EcoNet email and password in preferences and click **Save Preferences**
 
-The driver will authenticate, fetch your thermostat's state, and begin polling on the configured interval.
+---
 
-## Preferences
+## Thermostat
+
+### Features
+- Reads current temperature, heat/cool setpoints, HVAC mode, fan speed, and humidity
+- Sets mode, setpoints, and fan speed/mode via the ClearBlade HTTP→MQTT bridge
+- Enforces device deadband in auto mode (sends both setpoints in one command)
+- Away mode (`awayMode` attribute + `setAwayMode()` command)
+- Configurable poll interval; automatic token re-auth on expiry
+- Supports multiple thermostats on one account (select by index)
+
+### Supported HVAC Modes
+`heat` · `cool` · `auto` · `fan only` · `emergency heat` · `off`
+
+### Supported Fan Speeds
+`auto` · `low` · `medium` · `high` · `max`
+
+### Capabilities
+`Thermostat` · `RelativeHumidityMeasurement` · `Refresh` · `Initialize`
+
+### Preferences
 
 | Setting | Description |
 |---|---|
@@ -42,13 +56,58 @@ The driver will authenticate, fetch your thermostat's state, and begin polling o
 | EcoNet Password | Your Rheem EcoNet account password |
 | Thermostat Index | Which thermostat to control if you have multiple (0 = first) |
 | Poll Interval | How often to refresh state from the cloud (default: 5 minutes) |
-| Enable Debug Logging | Logs detailed info to the Hubitat log |
+| Enable Debug Logging | Logs detailed info to the Hubitat log (auto-disables after 30 minutes) |
+
+---
+
+## Water Heater
+
+### Features
+- Reads setpoint, operating mode, running state, and hot water tank level
+- Sets temperature, mode, and away mode
+- `Switch` capability maps to water heater on/off (restores last active mode when turned on)
+- Handles all three EcoNet control styles: `@MODE` only, `@ENABLED` only, or both
+- Mode list is read dynamically from the device — never hardcoded
+- Correctly resolves the firmware's dual-mode `ELECTRICGAS` entry based on device type (gas vs. electric)
+- Celsius/Fahrenheit selectable in preferences
+- Configurable poll interval; automatic token re-auth on expiry
+
+### Supported Modes
+`off` · `electric` · `energy saving` · `heat pump` · `high demand` · `gas` · `performance` · `vacation`
+
+Not all modes are available on every device — `supportedModes` attribute reflects what the device actually reports.
+
+### Capabilities
+`Switch` · `ThermostatHeatingSetpoint` · `ThermostatOperatingState` · `Refresh` · `Initialize`
+
+### Custom Attributes
+
+| Attribute | Values | Description |
+|---|---|---|
+| `waterHeaterMode` | string | Current operating mode |
+| `supportedModes` | JSON array | Modes supported by this device |
+| `hotWaterLevel` | 0 / 33 / 66 / 100 | Tank hot water availability |
+| `awayMode` | `away` / `home` | Away mode state |
+| `online` | `true` / `false` | Device connectivity |
+
+### Preferences
+
+| Setting | Description |
+|---|---|
+| EcoNet Email | Your Rheem EcoNet account email |
+| EcoNet Password | Your Rheem EcoNet account password |
+| Water Heater Index | Which water heater to control if you have multiple (0 = first) |
+| Temperature Unit | `F` (default) or `C` |
+| Poll Interval | How often to refresh state from the cloud (default: 5 minutes) |
+| Enable Debug Logging | Logs detailed info to the Hubitat log (auto-disables after 30 minutes) |
+
+---
 
 ## Notes
 
 - **Cloud-dependent**: All communication goes through Rheem's ClearBlade cloud API. Local control is not possible.
-- **Commands**: Sent via the ClearBlade REST messaging endpoint, which proxies to MQTT — the same mechanism used by the Rheem mobile app.
-- **Water heaters**: The Home Assistant integration also supports EcoNet water heaters; this driver covers thermostats only.
+- **Commands**: Sent via the ClearBlade REST messaging endpoint (`POST /api/v/1/message/{systemKey}/publish`), which proxies to the underlying MQTT broker — the same mechanism used by the Rheem mobile app.
+- **Multiple devices**: If you have more than one thermostat or water heater on your account, create a separate Hubitat device for each and set the index preference (0, 1, 2, …) accordingly.
 
 ## Credits
 

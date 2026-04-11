@@ -1,0 +1,29 @@
+{
+  "packageName": "Rheem EcoNet",
+  "minimumHEVersion": "2.2.8",
+  "author": "brossow",
+  "version": "1.0.0",
+  "dateReleased": "2026-04-10",
+  "releaseNotes": "Initial release — thermostat and water heater drivers.",
+  "documentationLink": "https://github.com/brossow/hubitat-econet",
+  "communityLink": "",
+  "apps": [],
+  "drivers": [
+    {
+      "id": "27d38842-c75c-4668-840d-d0d9a8e1961a",
+      "name": "Rheem EcoNet Thermostat",
+      "namespace": "community",
+      "location": "https://raw.githubusercontent.com/brossow/hubitat-econet/main/EcoNetThermostat.groovy",
+      "required": false,
+      "primaryType": "Driver"
+    },
+    {
+      "id": "eeee6d79-39d3-41d6-9b9a-a491a502be9b",
+      "name": "Rheem EcoNet Water Heater",
+      "namespace": "community",
+      "location": "https://raw.githubusercontent.com/brossow/hubitat-econet/main/EcoNetWaterHeater.groovy",
+      "required": false,
+      "primaryType": "Driver"
+    }
+  ]
+}

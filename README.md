@@ -1,6 +1,6 @@
 # Rheem EcoNet — Hubitat Drivers
 
-Hubitat Elevation drivers for Rheem EcoNet thermostats and water heaters, ported from the [Home Assistant pyeconet integration](https://github.com/home-assistant/core/tree/dev/homeassistant/components/econet). Uses the ClearBlade cloud REST API for polling and MQTT command publishing.
+Hubitat Elevation drivers for Rheem EcoNet thermostats and water heaters, inspired by the [Home Assistant pyeconet integration](https://github.com/home-assistant/core/tree/dev/homeassistant/components/econet). Uses the ClearBlade cloud REST API for polling and MQTT command publishing.
 
 ## Drivers
 
@@ -66,6 +66,7 @@ Each driver is self-contained — no parent app required.
 - Reads setpoint, operating mode, running state, and hot water tank level
 - Sets temperature, mode, and away mode
 - `Switch` capability maps to water heater on/off (restores last active mode when turned on)
+- `ThermostatMode` capability exposes `heat` / `auto` / `emergency heat` / `off` for Rule Machine compatibility
 - Handles all three EcoNet control styles: `@MODE` only, `@ENABLED` only, or both
 - Mode list is read dynamically from the device — never hardcoded
 - Correctly resolves the firmware's dual-mode `ELECTRICGAS` entry based on device type (gas vs. electric)
@@ -78,7 +79,7 @@ Each driver is self-contained — no parent app required.
 Not all modes are available on every device — `supportedModes` attribute reflects what the device actually reports.
 
 ### Capabilities
-`Switch` · `ThermostatHeatingSetpoint` · `ThermostatOperatingState` · `Refresh` · `Initialize`
+`Switch` · `ThermostatHeatingSetpoint` · `ThermostatOperatingState` · `ThermostatMode` · `Refresh` · `Initialize`
 
 ### Custom Attributes
 
@@ -86,6 +87,8 @@ Not all modes are available on every device — `supportedModes` attribute refle
 |---|---|---|
 | `waterHeaterMode` | string | Current operating mode |
 | `supportedModes` | JSON array | Modes supported by this device |
+| `thermostatMode` | `heat` / `auto` / `emergency heat` / `off` | RM-compatible mode derived from water heater mode |
+| `supportedThermostatModes` | JSON array | RM thermostat modes available on this device |
 | `hotWaterLevel` | 0 / 33 / 66 / 100 | Tank hot water availability |
 | `awayMode` | `away` / `home` | Away mode state |
 | `online` | `true` / `false` | Device connectivity |
@@ -111,4 +114,4 @@ Not all modes are available on every device — `supportedModes` attribute refle
 
 ## Credits
 
-Ported from the [Home Assistant EcoNet integration](https://github.com/home-assistant/core/tree/dev/homeassistant/components/econet) and the [pyeconet library](https://github.com/w1ll1am23/pyeconet) by [@w1ll1am23](https://github.com/w1ll1am23).
+Inspired by the [Home Assistant EcoNet integration](https://github.com/home-assistant/core/tree/dev/homeassistant/components/econet) and the [pyeconet library](https://github.com/w1ll1am23/pyeconet) by [@w1ll1am23](https://github.com/w1ll1am23).

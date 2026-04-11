@@ -1,7 +1,7 @@
 /**
  * Rheem EcoNet Thermostat — Hubitat Driver
  *
- * Ported from the Home Assistant pyeconet integration.
+ * Inspired by the Home Assistant pyeconet integration.
  * Uses the ClearBlade cloud API at rheem.clearblade.com.
  *
  * Authentication and data fetching use REST endpoints.
@@ -19,7 +19,7 @@ metadata {
     definition(
         name: "Rheem EcoNet Thermostat",
         namespace: "community",
-        author: "Ported from Home Assistant / pyeconet"
+        author: "brossow"
     ) {
         capability "Thermostat"
         capability "RelativeHumidityMeasurement"

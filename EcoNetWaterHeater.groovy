@@ -1,7 +1,7 @@
 /**
  * Rheem EcoNet Water Heater — Hubitat Driver
  *
- * Ported from the Home Assistant pyeconet integration.
+ * Inspired by the Home Assistant pyeconet integration.
  * Uses the ClearBlade cloud REST API for polling and MQTT command publishing.
  *
  * Command endpoint (ClearBlade Go-SDK source):
@@ -20,22 +20,24 @@ metadata {
     definition(
         name: "Rheem EcoNet Water Heater",
         namespace: "community",
-        author: "Ported from Home Assistant / pyeconet"
+        author: "brossow"
     ) {
         capability "Actuator"
         capability "Sensor"
         capability "Switch"                   // on() / off()
         capability "ThermostatHeatingSetpoint" // heatingSetpoint + setHeatingSetpoint()
         capability "ThermostatOperatingState"  // thermostatOperatingState (heating / idle)
+        capability "ThermostatMode"            // thermostatMode + setThermostatMode() — RM compatibility
         capability "Refresh"
         capability "Initialize"
 
-        attribute "waterHeaterMode",    "string"   // current mode display name
-        attribute "supportedModes",     "string"   // JSON array of mode names
-        attribute "thermostatSetpoint", "number"   // alias for heatingSetpoint (used by some apps)
-        attribute "hotWaterLevel",      "number"   // 0 / 33 / 66 / 100
-        attribute "online",             "enum", ["true", "false"]
-        attribute "awayMode",           "enum", ["away", "home"]
+        attribute "waterHeaterMode",          "string"   // current mode display name
+        attribute "supportedModes",           "string"   // JSON array of water heater mode names
+        attribute "supportedThermostatModes", "string"   // JSON array of RM thermostat modes
+        attribute "thermostatSetpoint",       "number"   // alias for heatingSetpoint (used by some apps)
+        attribute "hotWaterLevel",            "number"   // 0 / 33 / 66 / 100
+        attribute "online",                   "enum", ["true", "false"]
+        attribute "awayMode",                 "enum", ["away", "home"]
 
         command "setWaterHeaterMode", [[
             name: "Mode", type: "ENUM",
@@ -45,6 +47,9 @@ metadata {
         command "setAwayMode", [[
             name: "Away Mode", type: "ENUM", constraints: ["away", "home"]
         ]]
+        command "heat"
+        command "auto"
+        command "emergencyHeat"
     }
 
     preferences {
@@ -95,6 +100,18 @@ metadata {
     "gas"          : "GAS",
     "performance"  : "PERFORMANCE",
     "vacation"     : "VACATION",
+]
+
+// Water heater display name → Hubitat thermostat mode (for Rule Machine compatibility)
+@Field Map WH_MODE_TO_THERMOSTAT = [
+    "off"          : "off",
+    "vacation"     : "off",           // treated as off from RM's perspective
+    "energy saving": "auto",
+    "heat pump"    : "heat",
+    "electric"     : "heat",
+    "gas"          : "heat",
+    "performance"  : "heat",
+    "high demand"  : "emergency heat",
 ]
 
 // ---------------------------------------------------------------------------
@@ -265,6 +282,8 @@ void updateAttributes(Map equip) {
     if (modeDisplay != null) {
         sendEvent(name: "waterHeaterMode", value: modeDisplay)
         sendEvent(name: "switch",          value: (modeDisplay == "off") ? "off" : "on")
+        def tMode = WH_MODE_TO_THERMOSTAT[modeDisplay]
+        if (tMode) sendEvent(name: "thermostatMode", value: tMode)
         if (modeDisplay != "off" && modeDisplay != "vacation") {
             state.lastActiveMode = modeDisplay
         }
@@ -274,6 +293,14 @@ void updateAttributes(Map equip) {
     def supportedModes = buildSupportedModes(equip)
     if (supportedModes) {
         sendEvent(name: "supportedModes", value: JsonOutput.toJson(supportedModes))
+        state.supportedModesList = supportedModes
+        // Derive the RM thermostat mode subset from the water heater's supported modes
+        def tModes = []
+        if (supportedModes.any { it in ["heat pump", "electric", "gas", "performance"] }) tModes << "heat"
+        if (supportedModes.contains("energy saving")) tModes << "auto"
+        if (supportedModes.contains("high demand"))   tModes << "emergency heat"
+        if (supportedModes.contains("off") || supportedModes.contains("vacation")) tModes << "off"
+        sendEvent(name: "supportedThermostatModes", value: JsonOutput.toJson(tModes))
     }
 
     // Operating state — @RUNNING is a non-empty string when active
@@ -396,6 +423,8 @@ def setWaterHeaterMode(String mode) {
     publishCommand(payload)
     sendEvent(name: "waterHeaterMode", value: mode)
     sendEvent(name: "switch",          value: (mode == "off") ? "off" : "on")
+    def tMode = WH_MODE_TO_THERMOSTAT[mode]
+    if (tMode) sendEvent(name: "thermostatMode", value: tMode)
     if (mode != "off" && mode != "vacation") state.lastActiveMode = mode
 }
 
@@ -404,6 +433,38 @@ def setAwayMode(String mode) {
     publishCommand(["@AWAY": (mode == "away")])
     sendEvent(name: "awayMode", value: mode)
 }
+
+// ThermostatMode capability — maps RM thermostat modes to water heater modes.
+// "heat" resolves to the best available heating mode on this device.
+def setThermostatMode(String thermostatMode) {
+    logDebug "setThermostatMode(${thermostatMode})"
+    def supported = (state.supportedModesList ?: []) as List
+    switch (thermostatMode) {
+        case "off":
+            setWaterHeaterMode("off")
+            break
+        case "auto":
+            setWaterHeaterMode("energy saving")
+            break
+        case "heat":
+            if      (supported.contains("heat pump"))    setWaterHeaterMode("heat pump")
+            else if (supported.contains("electric"))     setWaterHeaterMode("electric")
+            else if (supported.contains("gas"))          setWaterHeaterMode("gas")
+            else if (supported.contains("performance"))  setWaterHeaterMode("performance")
+            else log.warn "EcoNet WH: no heat-equivalent mode available on this device"
+            break
+        case "emergency heat":
+            if (supported.contains("high demand")) setWaterHeaterMode("high demand")
+            else log.warn "EcoNet WH: 'high demand' mode not available on this device"
+            break
+        default:
+            log.warn "EcoNet WH: unsupported thermostat mode '${thermostatMode}'"
+    }
+}
+
+def heat()          { setThermostatMode("heat") }
+def auto()          { setThermostatMode("auto") }
+def emergencyHeat() { setThermostatMode("emergency heat") }
 
 // Build the MQTT payload for a mode change.
 // Correctly handles all three device control styles and the ELECTRICGAS dual-mode entry.

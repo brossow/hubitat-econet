@@ -2,7 +2,7 @@
   "packageName": "Rheem EcoNet",
   "minimumHEVersion": "2.2.8",
   "author": "brossow",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "dateReleased": "2026-04-10",
   "releaseNotes": "Initial release — thermostat and water heater drivers.",
   "documentationLink": "https://github.com/brossow/hubitat-econet",

@@ -1,5 +1,6 @@
 /**
  * Rheem EcoNet Thermostat — Hubitat Driver
+ * Version: 0.1.0
  *
  * Inspired by the Home Assistant pyeconet integration.
  * Uses the ClearBlade cloud API at rheem.clearblade.com.

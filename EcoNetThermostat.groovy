@@ -30,10 +30,14 @@ metadata {
         attribute "runningState",   "string"   // raw @RUNNINGSTATUS value
         attribute "fanSpeed",       "string"   // auto / low / medium / high / max
         attribute "online",         "enum", ["true", "false"]
+        attribute "awayMode",       "enum", ["away", "home"]
 
         command "setFanSpeed", [
             [name: "Fan Speed", type: "ENUM",
              constraints: ["auto", "low", "medium", "high", "max"]]
+        ]
+        command "setAwayMode", [
+            [name: "Away Mode", type: "ENUM", constraints: ["away", "home"]]
         ]
     }
 
@@ -98,6 +102,7 @@ def installed() {
 def updated() {
     logDebug "Driver updated — re-initializing"
     unschedule()
+    if (settings.logEnable) runIn(1800, "logsOff")
     initialize()
 }
 
@@ -139,13 +144,16 @@ def login() {
                     fetchEquipment()
                 } else {
                     log.error "EcoNet login failed: ${data?.options?.message}"
+                    // Bad credentials — no point retrying automatically
                 }
             } else {
-                log.error "EcoNet login HTTP ${resp.status}"
+                log.error "EcoNet login HTTP ${resp.status} — retrying in 2 minutes"
+                runIn(120, "login")
             }
         }
     } catch (Exception e) {
-        log.error "EcoNet login exception: ${e.message}"
+        log.error "EcoNet login exception: ${e.message} — retrying in 2 minutes"
+        runIn(120, "login")
     }
 }
 
@@ -220,11 +228,12 @@ void parseLocations(List locations) {
     state.fanSpeedEnumText   = equip["@FANSPEED"]?.constraints?.enumText
     state.fanModeEnumText    = equip["@FANMODE"]?.constraints?.enumText
 
-    // Cache setpoint limits
+    // Cache setpoint limits and deadband
     state.heatSpLow  = equip["@HEATSETPOINT"]?.constraints?.lowerLimit
     state.heatSpHigh = equip["@HEATSETPOINT"]?.constraints?.upperLimit
     state.coolSpLow  = equip["@COOLSETPOINT"]?.constraints?.lowerLimit
     state.coolSpHigh = equip["@COOLSETPOINT"]?.constraints?.upperLimit
+    state.deadband   = equip["@DEADBAND"]?.value ?: 2
 
     updateAttributes(equip)
 }
@@ -264,6 +273,13 @@ void updateAttributes(Map equip) {
     } else if (hubMode == "cool") {
         def cSP = equip["@COOLSETPOINT"]?.value
         if (cSP != null) sendEvent(name: "thermostatSetpoint", value: cSP, unit: "°F")
+    } else if (hubMode == "auto") {
+        // Report midpoint of heat/cool setpoints as a single reference value
+        def hSP = equip["@HEATSETPOINT"]?.value
+        def cSP = equip["@COOLSETPOINT"]?.value
+        if (hSP != null && cSP != null) {
+            sendEvent(name: "thermostatSetpoint", value: Math.round((hSP + cSP) / 2), unit: "°F")
+        }
     }
 
     // Operating state — @RUNNINGSTATUS is non-empty when active
@@ -304,6 +320,10 @@ void updateAttributes(Map equip) {
     // Online status
     def connected = equip["@CONNECTED"]
     if (connected != null) sendEvent(name: "online", value: connected.toString())
+
+    // Away mode
+    def away = equip["@AWAY"]
+    if (away != null) sendEvent(name: "awayMode", value: away ? "away" : "home")
 }
 
 // ---------------------------------------------------------------------------
@@ -343,7 +363,18 @@ def setHeatingSetpoint(BigDecimal temp) {
         log.error "Heating setpoint ${temp}°F out of range [${lo}–${hi}]"
         return
     }
-    publishCommand(["@HEATSETPOINT": temp.intValue()])
+    def payload = ["@HEATSETPOINT": temp.intValue()]
+    // In auto mode, also enforce the deadband against the cool setpoint
+    def currentMode = device.currentValue("thermostatMode")
+    if (currentMode == "auto") {
+        def deadband = (state.deadband as Integer) ?: 2
+        def coolSP = device.currentValue("coolingSetpoint") as Integer
+        if (coolSP != null && temp.intValue() > coolSP - deadband) {
+            payload["@COOLSETPOINT"] = temp.intValue() + deadband
+            sendEvent(name: "coolingSetpoint", value: temp.intValue() + deadband, unit: "°F")
+        }
+    }
+    publishCommand(payload)
     sendEvent(name: "heatingSetpoint", value: temp, unit: "°F")
 }
 
@@ -355,7 +386,18 @@ def setCoolingSetpoint(BigDecimal temp) {
         log.error "Cooling setpoint ${temp}°F out of range [${lo}–${hi}]"
         return
     }
-    publishCommand(["@COOLSETPOINT": temp.intValue()])
+    def payload = ["@COOLSETPOINT": temp.intValue()]
+    // In auto mode, also enforce the deadband against the heat setpoint
+    def currentMode = device.currentValue("thermostatMode")
+    if (currentMode == "auto") {
+        def deadband = (state.deadband as Integer) ?: 2
+        def heatSP = device.currentValue("heatingSetpoint") as Integer
+        if (heatSP != null && temp.intValue() < heatSP + deadband) {
+            payload["@HEATSETPOINT"] = temp.intValue() - deadband
+            sendEvent(name: "heatingSetpoint", value: temp.intValue() - deadband, unit: "°F")
+        }
+    }
+    publishCommand(payload)
     sendEvent(name: "coolingSetpoint", value: temp, unit: "°F")
 }
 
@@ -391,6 +433,13 @@ def setFanSpeed(String speed) {
 
     publishCommand(["@FANSPEED": idx])
     sendEvent(name: "fanSpeed", value: speed)
+}
+
+def setAwayMode(String mode) {
+    logDebug "setAwayMode(${mode})"
+    def away = (mode == "away")
+    publishCommand(["@AWAY": away])
+    sendEvent(name: "awayMode", value: mode)
 }
 
 // ---------------------------------------------------------------------------
@@ -489,6 +538,11 @@ def findEnumIndex(List list, Closure predicate) {
         if (predicate(list[i])) return i
     }
     return null
+}
+
+void logsOff() {
+    log.info "EcoNet: debug logging disabled after 30 minutes"
+    device.updateSetting("logEnable", [value: "false", type: "bool"])
 }
 
 void logDebug(String msg) {

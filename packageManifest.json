@@ -6,7 +6,7 @@
   "dateReleased": "2026-04-10",
   "releaseNotes": "Initial release — thermostat and water heater drivers.",
   "documentationLink": "https://github.com/brossow/hubitat-econet",
-  "communityLink": "",
+  "communityLink": "https://community.hubitat.com/t/drivers-rheem-econet-thermostat-water-heater/163127",
   "apps": [],
   "drivers": [
     {

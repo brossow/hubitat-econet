@@ -15,13 +15,6 @@ Each driver is self-contained — no parent app required.
 
 ## Installation
 
-### Via Hubitat Package Manager (recommended)
-
-1. In Hubitat, open **Apps → Hubitat Package Manager → Install**
-2. Search for **Rheem EcoNet** and install
-
-### Manual
-
 1. In Hubitat, go to **Drivers Code → New Driver**
 2. Paste the contents of the desired `.groovy` file and click **Save**
 3. Go to **Devices → Add Device → Virtual**, give it a name, and select the driver type

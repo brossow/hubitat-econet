@@ -23,11 +23,11 @@ metadata {
         author: "brossow"
     ) {
         capability "Thermostat"
-        capability "RelativeHumidityMeasurement"
         capability "Refresh"
         capability "Initialize"
 
         // Extra attributes not in the Thermostat capability
+        attribute "humidity",       "number"   // relative humidity % (not using capability to avoid multisensor classification)
         attribute "runningState",   "string"   // raw @RUNNINGSTATUS value
         attribute "fanSpeed",       "string"   // auto / low / medium / high / max
         attribute "online",         "enum", ["true", "false"]

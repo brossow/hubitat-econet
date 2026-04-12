@@ -39,7 +39,7 @@ Each driver is self-contained — no parent app required.
 `auto` · `low` · `medium` · `high` · `max`
 
 ### Capabilities
-`Thermostat` · `RelativeHumidityMeasurement` · `Refresh` · `Initialize`
+`Thermostat` · `Refresh` · `Initialize`
 
 ### Preferences
 

@@ -1,0 +1,14 @@
+{
+  "author": "brossow",
+  "gitHubUrl": "https://github.com/brossow",
+  "packages": [
+    {
+      "id": "978f896a-dbae-408f-858b-1bace96468a6",
+      "name": "Rheem EcoNet",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/brossow/hubitat-econet/main/packageManifest.json",
+      "description": "Drivers for Rheem EcoNet thermostats and water heaters via the ClearBlade cloud API.",
+      "tags": ["Cloud", "Climate Control", "Temperature & Humidity", "Water Heater"]
+    }
+  ]
+}

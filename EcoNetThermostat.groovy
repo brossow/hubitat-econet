@@ -1,6 +1,6 @@
 /**
  * Rheem EcoNet Thermostat — Hubitat Driver
- * Version: 0.1.1
+ * Version: 0.1.2
  *
  * Inspired by the Home Assistant pyeconet integration.
  * Uses the ClearBlade cloud API at rheem.clearblade.com.
@@ -404,20 +404,38 @@ def setCoolingSetpoint(BigDecimal temp) {
 
 def setThermostatFanMode(String hubFanMode) {
     logDebug "setThermostatFanMode(${hubFanMode})"
-    // Map Hubitat fan mode → EcoNet fan mode key
-    // "auto" → AUTO, "circulate"/"on" → ON_CONTINUOUS
-    def targetKey = (hubFanMode == "auto") ? "AUTO" : "ON_CONTINUOUS"
 
-    def enumText = state.fanModeEnumText as List
-    if (!enumText) { log.warn "Fan mode enum not cached"; return }
-
-    def idx = findEnumIndex(enumText) { text ->
-        text.trim().replace(" ", "_").replace("/", "_").toUpperCase() == targetKey
+    // Prefer @FANMODE if the device exposes it
+    def fanModeEnum = state.fanModeEnumText as List
+    if (fanModeEnum) {
+        // "auto" → AUTO, "circulate"/"on" → ON_CONTINUOUS
+        def targetKey = (hubFanMode == "auto") ? "AUTO" : "ON_CONTINUOUS"
+        def idx = findEnumIndex(fanModeEnum) { text ->
+            text.trim().replace(" ", "_").replace("/", "_").toUpperCase() == targetKey
+        }
+        if (idx != null) {
+            publishCommand(["@FANMODE": idx])
+            sendEvent(name: "thermostatFanMode", value: hubFanMode)
+            return
+        }
+        log.warn "EcoNet: fan mode '${targetKey}' not found in @FANMODE enum — falling back to @FANSPEED"
     }
-    if (idx == null) { log.warn "Fan mode '${targetKey}' not found in ${enumText}"; return }
 
-    publishCommand(["@FANMODE": idx])
+    // Fall back to @FANSPEED for devices that don't expose @FANMODE
+    def fanSpeedEnum = state.fanSpeedEnumText as List
+    if (!fanSpeedEnum) { log.warn "EcoNet: no fan mode or fan speed enum available"; return }
+
+    // "auto" → Auto speed; "on"/"circulate" → first non-auto speed
+    def targetSpeed = (hubFanMode == "auto") ? "AUTO" : null
+    def idx = findEnumIndex(fanSpeedEnum) { text ->
+        def key = text.trim().replace(" ", "_").replace(".", "").toUpperCase()
+        targetSpeed ? (key == targetSpeed) : (key != "AUTO")
+    }
+    if (idx == null) { log.warn "EcoNet: no suitable @FANSPEED entry for fan mode '${hubFanMode}'"; return }
+
+    publishCommand(["@FANSPEED": idx])
     sendEvent(name: "thermostatFanMode", value: hubFanMode)
+    sendEvent(name: "fanSpeed", value: (hubFanMode == "auto") ? "auto" : fanSpeedEnum[idx].trim().toLowerCase())
 }
 
 def setFanSpeed(String speed) {
